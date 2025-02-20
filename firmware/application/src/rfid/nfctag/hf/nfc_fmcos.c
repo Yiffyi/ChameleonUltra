@@ -198,6 +198,10 @@ void nfc_tag_fmcos_state_handler(uint8_t *p_data, uint16_t szDataBits) {
         p_inf = p_inf_end = inf_buffer; inf_inflight = 0;
         p_tx = tx_buffer;
         tx_blk_idx = 1;
+
+        m_tag_df = 0x3F00;
+        m_tag_ef = 0x0000;
+        m_tag_file = NULL;
         return;
     }
 
