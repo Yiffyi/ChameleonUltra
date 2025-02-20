@@ -3,6 +3,7 @@
 #include "lf_tag_em.h"
 #include "nfc_mf1.h"
 #include "nfc_mf0_ntag.h"
+#include "nfc_fmcos.h"
 #include "fds_ids.h"
 #include "fds_util.h"
 #include "tag_emulation.h"
@@ -70,9 +71,9 @@ static tag_slot_config_t slotConfig ALIGN_U32 = {
     // Configuration card slots
     // See tag_emulation_factory_init for actual tag content
     .slots = {
-        { .enabled_hf = true,  .enabled_lf = true,  .tag_hf = TAG_TYPE_MIFARE_1024, .tag_lf = TAG_TYPE_EM410X,    },   // 1
-        { .enabled_hf = true,  .enabled_lf = false, .tag_hf = TAG_TYPE_MF0ICU1,     .tag_lf = TAG_TYPE_UNDEFINED, },   // 2
-        { .enabled_hf = false, .enabled_lf = true,  .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_EM410X,    },   // 3
+        { .enabled_hf = true,  .enabled_lf = false, .tag_hf = TAG_TYPE_FMCOS_ZJZY,  .tag_lf = TAG_TYPE_UNDEFINED, },   // 1
+        { .enabled_hf = true,  .enabled_lf = false, .tag_hf = TAG_TYPE_FMCOS_ZJZY,  .tag_lf = TAG_TYPE_UNDEFINED, },   // 2
+        { .enabled_hf = false, .enabled_lf = false, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },   // 3
         { .enabled_hf = false, .enabled_lf = false, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },   // 4
         { .enabled_hf = false, .enabled_lf = false, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },   // 5
         { .enabled_hf = false, .enabled_lf = false, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },   // 6
@@ -110,6 +111,9 @@ static tag_base_handler_map_t tag_base_map[] = {
     { TAG_SENSE_HF,    TAG_TYPE_MF0ICU2,       nfc_tag_mf0_ntag_data_loadcb,     nfc_tag_mf0_ntag_data_savecb,      nfc_tag_mf0_ntag_data_factory,     &m_tag_data_hf },
     { TAG_SENSE_HF,    TAG_TYPE_MF0UL11,       nfc_tag_mf0_ntag_data_loadcb,     nfc_tag_mf0_ntag_data_savecb,      nfc_tag_mf0_ntag_data_factory,     &m_tag_data_hf },
     { TAG_SENSE_HF,    TAG_TYPE_MF0UL21,       nfc_tag_mf0_ntag_data_loadcb,     nfc_tag_mf0_ntag_data_savecb,      nfc_tag_mf0_ntag_data_factory,     &m_tag_data_hf },
+    // FMCOS tag simulation
+    { TAG_SENSE_HF,    TAG_TYPE_FMCOS_GENERIC, nfc_tag_fmcos_data_loadcb,        nfc_tag_fmcos_data_savecb,         nfc_tag_fmcos_data_factory,        &m_tag_data_hf },
+    { TAG_SENSE_HF,    TAG_TYPE_FMCOS_ZJZY,    nfc_tag_fmcos_data_loadcb,        nfc_tag_fmcos_data_savecb,         nfc_tag_fmcos_data_factory,        &m_tag_data_hf },
 };
 
 
@@ -721,6 +725,22 @@ void tag_emulation_factory_init(void) {
         get_fds_map_by_slot_sense_type_for_dump(2, TAG_SENSE_LF, &map_info);
         if (!fds_is_exists(map_info.id, map_info.key)) {
             tag_emulation_factory_data(2, slotConfig.slots[2].tag_lf);
+        }
+    }
+
+    if (slotConfig.slots[0].enabled_hf && slotConfig.slots[0].tag_hf == TAG_TYPE_FMCOS_ZJZY) {
+        // Initialize a high -frequency FMCOS ZJZY card in the card slot 1, if it does not exist.
+        get_fds_map_by_slot_sense_type_for_dump(0, TAG_SENSE_HF, &map_info);
+        if (!fds_is_exists(map_info.id, map_info.key)) {
+            tag_emulation_factory_data(0, slotConfig.slots[0].tag_hf);
+        }
+    }
+
+    if (slotConfig.slots[1].enabled_hf && slotConfig.slots[1].tag_hf == TAG_TYPE_FMCOS_ZJZY) {
+        // Initialize a high -frequency FMCOS ZJZY card in the card slot 1, if it does not exist.
+        get_fds_map_by_slot_sense_type_for_dump(1, TAG_SENSE_HF, &map_info);
+        if (!fds_is_exists(map_info.id, map_info.key)) {
+            tag_emulation_factory_data(1, slotConfig.slots[1].tag_hf);
         }
     }
 }

@@ -88,6 +88,10 @@ typedef enum {
 
     // HF14A-4 series            3000
 
+    // FMCOS 4000
+    TAG_TYPE_FMCOS_GENERIC = 4000,
+    TAG_TYPE_FMCOS_ZJZY
+
 } tag_specific_type_t;
 
 #define TAG_SPECIFIC_TYPE_OLD2NEW_LF_VALUES \
@@ -118,7 +122,9 @@ typedef enum {
     TAG_TYPE_MF0UL11,\
     TAG_TYPE_MF0UL21,\
     TAG_TYPE_NTAG_210,\
-    TAG_TYPE_NTAG_212
+    TAG_TYPE_NTAG_212,\
+    TAG_TYPE_FMCOS_GENERIC,\
+    TAG_TYPE_FMCOS_ZJZY
 
 typedef struct {
     tag_specific_type_t tag_hf;
