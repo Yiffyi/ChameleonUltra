@@ -8,6 +8,7 @@
             ],
             "defines": [
                 "NRF52840_XXAA",
+                "PROJECT_CHAMELEON_ULTRA",
                 "APP_TIMER_V2",
                 "APP_TIMER_V2_RTC1_ENABLED"
             ]
