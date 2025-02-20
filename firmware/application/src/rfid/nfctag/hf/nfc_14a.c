@@ -99,6 +99,8 @@ static uint8_t m_nfc_tx_buffer[MAX_NFC_TX_BUFFER_SIZE] = { 0x00 };
 // The N -secondary connection needs to use SAK, when the "third 'bit' in SAK is 1 is 1, the logo UID is incomplete
 static uint8_t m_uid_incomplete_sak[]   = { 0x04, 0xda, 0x17 };
 
+static uint8_t m_nfc_pcd_fsd = 256;
+
 /**
  * @brief Calculate BCC
  *
@@ -414,6 +416,7 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
         // Preparation status, processing news related to anti -collision
         case NFC_TAG_STATE_14A_READY: {
             static uint8_t uid[5] = { 0x00 };
+            m_nfc_pcd_fsd = 256;
             nfc_tag_14a_cascade_level_t level;
             // Extract cascade level
             if (szDataBits >= 16) {
@@ -538,9 +541,9 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
                     // Make sure the sub -packaging opens the support of ATS
                     if (auto_coll_res->ats->length > 0) {
                         // Take out FSD and return according to the maximum FSD
-                        uint8_t fsd = ats_fsdi_table[p_data[1] >> 4 & 0x0F] - 2;
+                        m_nfc_pcd_fsd = ats_fsdi_table[p_data[1] >> 4 & 0x0F] - 2;
                         // If the FSD is larger than the set of ATS, then returns normal ATS data, otherwise the data of the FSD limited length will be returned
-                        uint8_t len = fsd >= auto_coll_res->ats->length ? auto_coll_res->ats->length : fsd;
+                        uint8_t len = m_nfc_pcd_fsd >= auto_coll_res->ats->length ? auto_coll_res->ats->length : m_nfc_pcd_fsd;
                         // Back to ATS data according to FSD, FSD is the largest frame size supported by PCD. After removing CRC, it is the actual data frame size support
                         nfc_tag_14a_tx_bytes(auto_coll_res->ats->data, len, true);
                     } else {
@@ -557,6 +560,10 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
             }
         }
     }
+}
+
+uint8_t nfc_tag_14a_get_pcd_fsd() {
+    return m_nfc_pcd_fsd;
 }
 
 static inline void nfc_fdt_reset(void) {

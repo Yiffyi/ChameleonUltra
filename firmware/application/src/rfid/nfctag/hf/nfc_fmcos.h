@@ -4,6 +4,7 @@
 #include "nfc_14a.h"
 
 #define NFC_TAG_FMCOS_MEM_SIZE 4096
+#define NFC_TAG_FMCOS_MAX_RESP_SIZE 256
 
 typedef enum {
     NFC_TAG_MF1_WRITE_DENIED    =   0u,
@@ -22,20 +23,24 @@ typedef struct {
      *  @see nfc_tag_mf1_write_mode_t
      */
     nfc_tag_fmcos_write_mode_t mode_write;
+    uint8_t respond_to_mifare_auth;
 } nfc_tag_fmcos_configure_t;
 
 typedef enum nfc_tag_fmcos_file_type {
-    NFC_TAG_FMCOS_FILE_TYPE_DIR     = (uint8_t)1,
+    NFC_TAG_FMCOS_FILE_TYPE_DIR_NAME     = (uint8_t)1,
+    NFC_TAG_FMCOS_FILE_TYPE_DIR_FCI,
     NFC_TAG_FMCOS_FILE_TYPE_BINARY,
 } nfc_tag_fmcos_file_type_t;
 
 typedef struct {
-    uint16_t file_id;
+    uint16_t df_id;
+    uint16_t ef_id;
     nfc_tag_fmcos_file_type_t file_type;
 
+    nfc_tag_fmcos_file_t* next;
     uint8_t value_size;
     uint8_t value[];
-} nfc_tag_fmcos_file_container_t;
+} nfc_tag_fmcos_file_t;
 
 typedef struct __attribute__((aligned(4))) {
     nfc_tag_14a_coll_res_entity_t res_coll;
