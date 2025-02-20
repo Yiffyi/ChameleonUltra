@@ -1,0 +1,17 @@
+{
+    "configurations": [
+        {
+            "name": "nRF52840",
+            "compilerPath": "/usr/local/arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi/bin/arm-none-eabi-gcc",
+            "includePath": [
+                "${workspaceFolder}/**"
+            ],
+            "defines": [
+                "NRF52840_XXAA",
+                "APP_TIMER_V2",
+                "APP_TIMER_V2_RTC1_ENABLED"
+            ]
+        }
+    ],
+    "version": 4
+}
