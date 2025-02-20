@@ -1,0 +1,12 @@
+
+
+{
+    "image": "ghcr.io/rfidresearchgroup/chameleonultra-fw-builder:main",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-vscode.cpptools-extension-pack"
+            ]
+        }
+    }
+  }
