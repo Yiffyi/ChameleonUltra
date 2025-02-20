@@ -301,6 +301,23 @@ void nfc_tag_fmcos_reset_handler() {
     nfc_tag_fmcos_state_handler(NULL, 0);
 }
 
+int nfc_tag_fmcos_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
+    if (m_tag_type == TAG_TYPE_FMCOS_ZJZY) {
+        // if (m_tag_info->config.mode_block_write == NFC_TAG_MF1_WRITE_SHADOW) {
+        //     NRF_LOG_INFO("The mf1 is shadow write mode.");
+        //     return 0;
+        // }
+        // if (m_tag_info->config.mode_block_write == NFC_TAG_MF1_WRITE_SHADOW_REQ) {
+        //     NRF_LOG_INFO("The mf1 will be set to shadow write mode.");
+        //     m_tag_info->config.mode_block_write = NFC_TAG_MF1_WRITE_SHADOW;
+        // }
+        // Save the corresponding size data according to the current label type
+        return sizeof(nfc_tag_fmcos_information_t);
+    } else {
+        return 0;
+    }
+}
+
 int nfc_tag_fmcos_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
     // Make sure that external capacity is enough to convert to an information structure
     int info_size = sizeof(nfc_tag_fmcos_information_t);
