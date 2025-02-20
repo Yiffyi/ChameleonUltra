@@ -99,7 +99,7 @@ static uint8_t m_nfc_tx_buffer[MAX_NFC_TX_BUFFER_SIZE] = { 0x00 };
 // The N -secondary connection needs to use SAK, when the "third 'bit' in SAK is 1 is 1, the logo UID is incomplete
 static uint8_t m_uid_incomplete_sak[]   = { 0x04, 0xda, 0x17 };
 
-static uint8_t m_nfc_pcd_fsd = 256;
+static uint16_t m_nfc_pcd_fsd = 256;
 
 /**
  * @brief Calculate BCC
@@ -562,7 +562,7 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
     }
 }
 
-uint8_t nfc_tag_14a_get_pcd_fsd() {
+uint16_t nfc_tag_14a_get_pcd_fsd() {
     return m_nfc_pcd_fsd;
 }
 

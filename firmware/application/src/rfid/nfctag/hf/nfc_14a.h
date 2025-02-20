@@ -116,6 +116,6 @@ void nfc_tag_14a_tx_nbit(uint8_t data, uint32_t bits);
 bool is_valid_uid_size(uint8_t uid_length);
 
 // return FSD supported by PCD (if any)
-uint8_t nfc_tag_14a_get_pcd_fsd();
+uint16_t nfc_tag_14a_get_pcd_fsd();
 
 #endif

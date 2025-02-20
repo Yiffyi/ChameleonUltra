@@ -48,7 +48,7 @@ void fmcos_select_file(uint8_t *p_cmd, uint16_t cb_cmd, uint8_t **pp_inf_end) {
     uint8_t found = 0;
     if (p1 == 0x00 && p2 == 0x00 && aid_len == 2) {
         uint16_t idx = (((uint16_t)aid[0]) << 8) | aid[1];
-        for(nfc_tag_fmcos_file_t *p = &m_tag_info->memory; p != NULL; p = p->next) {
+        for(nfc_tag_fmcos_file_t *p = (nfc_tag_fmcos_file_t*)m_tag_info->memory; p != NULL; p = p->next) {
             if (p->df_id == idx && p->file_type == NFC_TAG_FMCOS_FILE_TYPE_DIR_FCI) { // is DF
                 memcpy(p_inf_end, p->value, p->value_size);
                 p_inf_end += p->value_size;
@@ -67,7 +67,7 @@ void fmcos_select_file(uint8_t *p_cmd, uint16_t cb_cmd, uint8_t **pp_inf_end) {
         }
     } else if (p1 == 0x40 && p2 == 0x00 && aid_len > 0) {
         nfc_tag_fmcos_file_t *p;
-        for(p = &m_tag_info->memory; p != NULL; p = p->next) {
+        for(p = (nfc_tag_fmcos_file_t*)m_tag_info->memory; p != NULL; p = p->next) {
             if (p->file_type == NFC_TAG_FMCOS_FILE_TYPE_DIR_NAME && aid_len == p->value_size && memcmp(p->value, aid, p->value_size) == 0) {
                 break;
             }
@@ -78,7 +78,7 @@ void fmcos_select_file(uint8_t *p_cmd, uint16_t cb_cmd, uint8_t **pp_inf_end) {
             m_tag_df = p->df_id;
             m_tag_ef = 0x0000;
             found = 1;
-            for(p = &m_tag_info->memory; p != NULL; p = p->next) {
+            for(p = (nfc_tag_fmcos_file_t*)m_tag_info->memory; p != NULL; p = p->next) {
                 if (p->file_type == NFC_TAG_FMCOS_FILE_TYPE_DIR_FCI && p->df_id == m_tag_df) {
                     memcpy(p_inf_end, p->value, p->value_size);
                     p_inf_end += p->value_size;
@@ -127,7 +127,7 @@ void fmcos_read_binary(uint8_t *p_cmd, uint16_t cb_cmd, uint8_t **pp_inf_end) {
     if (ef_idx == m_tag_ef && m_tag_file && m_tag_file->file_type == NFC_TAG_FMCOS_FILE_TYPE_BINARY) {
         file = m_tag_file;
     } else {
-        for(nfc_tag_fmcos_file_t *p = &m_tag_info->memory; p != NULL; p = p->next) {
+        for(nfc_tag_fmcos_file_t *p = (nfc_tag_fmcos_file_t*)m_tag_info->memory; p != NULL; p = p->next) {
             if (p->df_id == m_tag_df && p->ef_id == ef_idx && m_tag_file ->file_type == NFC_TAG_FMCOS_FILE_TYPE_BINARY) { // is EF
                 file = p;
                 break;
@@ -180,7 +180,7 @@ void fmcos_get_challenge(uint8_t *p_cmd, uint16_t cb_cmd, uint8_t **pp_inf_end) 
     *p_inf_end = sw1; p_inf_end++;
     *p_inf_end = sw2; p_inf_end++;
     *pp_inf_end = p_inf_end;
-    return
+    return;
 }
 
 void nfc_tag_fmcos_state_handler(uint8_t *p_data, uint16_t szDataBits) {
@@ -215,7 +215,7 @@ void nfc_tag_fmcos_state_handler(uint8_t *p_data, uint16_t szDataBits) {
             tx_buffer[0] = (p_data[0] & 0xEE) | tx_blk_idx;
             p_tx = tx_buffer;
 
-            uint8_t p_cmd;
+            uint8_t *p_cmd;
             uint16_t cb_cmd;
             if (rx_use_cid) {
                 p_cmd = p_data + 2;
@@ -271,7 +271,7 @@ void nfc_tag_fmcos_state_handler(uint8_t *p_data, uint16_t szDataBits) {
     }
 
     // process INF
-    uint8_t fsd = nfc_tag_14a_get_pcd_fsd();
+    uint16_t fsd = nfc_tag_14a_get_pcd_fsd();
     if ((p_tx - tx_buffer) + 2 + (p_inf_end - p_inf) > fsd) {
         inf_inflight = fsd - (p_tx - tx_buffer);
         memcpy(p_inf, p_tx, inf_inflight);
@@ -330,11 +330,11 @@ bool nfc_tag_fmcos_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     };
 
     nfc_tag_fmcos_information_t fmcos_tmp_info;
-    nfc_tag_fmcos_information_t *p_fmcos_info;
+    nfc_tag_fmcos_information_t *p_fmcos_info = &fmcos_tmp_info;
 
     memcpy(p_fmcos_info->memory, &mf, sizeof(mf));
 
-    p_fmcos_info->config.mode_write = NFC_TAG_MF1_WRITE_IGNORE;
+    p_fmcos_info->config.mode_write = NFC_TAG_FMCOS_WRITE_IGNORE;
     p_fmcos_info->config.respond_to_mifare_auth = 0;
 
     p_fmcos_info->res_coll.atqa[0] = 0x04;

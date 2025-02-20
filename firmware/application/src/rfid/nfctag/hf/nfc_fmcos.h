@@ -7,10 +7,10 @@
 #define NFC_TAG_FMCOS_MAX_RESP_SIZE 256
 
 typedef enum {
-    NFC_TAG_MF1_WRITE_DENIED    =   0u,
-    NFC_TAG_MF1_WRITE_IGNORE    =   1u,
-    NFC_TAG_MF1_WRITE_SHADOW    =   2u,
-    NFC_TAG_MF1_WRITE_NORMAL    =   3u,
+    NFC_TAG_FMCOS_WRITE_DENIED    =   0u,
+    NFC_TAG_FMCOS_WRITE_IGNORE    =   1u,
+    NFC_TAG_FMCOS_WRITE_SHADOW    =   2u,
+    NFC_TAG_FMCOS_WRITE_NORMAL    =   3u,
 } nfc_tag_fmcos_write_mode_t;
 
 // FMCOS configuration
@@ -32,12 +32,12 @@ typedef enum nfc_tag_fmcos_file_type {
     NFC_TAG_FMCOS_FILE_TYPE_BINARY,
 } nfc_tag_fmcos_file_type_t;
 
-typedef struct {
+typedef struct nfc_tag_fmcos_file {
     uint16_t df_id;
     uint16_t ef_id;
     nfc_tag_fmcos_file_type_t file_type;
 
-    nfc_tag_fmcos_file_t* next;
+    struct nfc_tag_fmcos_file* next;
     uint8_t value_size;
     uint8_t value[];
 } nfc_tag_fmcos_file_t;
