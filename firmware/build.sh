@@ -4,6 +4,9 @@ if [[ $BASH_SOURCE = */* ]]; then
   cd -- "${BASH_SOURCE%/*}/" || exit
 fi
 
+export LC_ALL=C.UTF-8
+export LANG=C.UTF-8
+
 softdevice=s140
 softdevice_version=7.2.0
 softdevice_id=0x0100
