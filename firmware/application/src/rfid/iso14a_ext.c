@@ -30,7 +30,7 @@ void nfc_14a_decode_pcb(uint8_t pcb, nfc_14a_pcb_info_t *p_info) {
         break;
     case NFC_14A_BLOCK_TYPE_R:
         p_info->r_ack = (pcb & 0x10) == 0x00;
-        p_info->r_nak = (pcb & 0x20) == 0x20;
+        p_info->r_nak = (pcb & 0x10) == 0x10; // FMCOS2.0 document is wrong, see http://www.emutag.com/iso/14443-4.pdf
         break;
     case NFC_14A_BLOCK_TYPE_S:
         p_info->s_deselect = (pcb & 0x30) == 0x00;
@@ -59,7 +59,7 @@ uint8_t nfc_14a_encode_pcb(nfc_14a_pcb_info_t* p_pcb_info) {
             pcb &= 0xef;
         }
         if (p_pcb_info->r_nak) {
-            pcb |= 0x20;
+            pcb |= 0x10;
         }
         break;
     case NFC_14A_BLOCK_TYPE_S:
