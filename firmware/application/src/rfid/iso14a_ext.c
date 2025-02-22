@@ -104,6 +104,7 @@ bool nfc_14a_decode_frame(uint8_t *p_buf, uint16_t cb_buf, nfc_14a_frame_t *p_fr
         p_frame->nad = *p_buf; p_buf++; cb_buf--;
     }
 
+    p_frame->p_inf = p_buf;
     p_frame->inf_size = cb_buf; // the rest of buffer
     return true; // maybe we should check cb_buf haha
 }
@@ -120,14 +121,15 @@ bool nfc_14a_encode_frame(nfc_14a_frame_t *p_frame, uint8_t* p_buf, uint16_t* p_
         p_buf[cb_used++] = p_frame->nad;
     }
 
-    if (cb_used + p_frame->inf_size > *p_cb_buf) {
-        *p_cb_buf = cb_used + p_frame->inf_size;
-        return false;
-    } else {
+    // TODO: make it right
+    // if (cb_used + p_frame->inf_size > *p_cb_buf) {
+        // *p_cb_buf = cb_used + p_frame->inf_size;
+        // return false;
+    // } else {
         memcpy(p_buf+cb_used, p_frame->p_inf, p_frame->inf_size);
         cb_used += p_frame->inf_size;
         *p_cb_buf = cb_used;
         return true;
-    }
+    // }
 
 }
