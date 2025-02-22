@@ -14,11 +14,6 @@
 #include "nrf_log_default_backends.h"
 NRF_LOG_MODULE_REGISTER();
 
-#define ISO14443A_IBLOCK 0x00
-#define ISO14443A_RBLOCK 0x80
-#define ISO14443A_R_ACK 0xA0
-#define ISO14443A_R_NAK 0xB0
-
 // Define and use shadow anti -collision resources
 static nfc_tag_14a_coll_res_reference_t m_shadow_coll_res;
 //Save the specific type of FMCOS currently being simulated
@@ -56,7 +51,8 @@ void fmcos_select_file(uint8_t *p_cmd, uint16_t cb_cmd, uint8_t **pp_inf_end) {
                 p_inf_end += p->value_size;
 
                 m_tag_file = NULL;
-                m_tag_ef = 0x0000;
+                m_tag_df = p->df_id;
+                m_tag_ef = p->ef_id;
                 found = 1;
                 break;
             }
@@ -78,7 +74,7 @@ void fmcos_select_file(uint8_t *p_cmd, uint16_t cb_cmd, uint8_t **pp_inf_end) {
         if (p != NULL) {
             m_tag_file = NULL;
             m_tag_df = p->df_id;
-            m_tag_ef = 0x0000;
+            m_tag_ef = p->ef_id;
             found = 1;
             for(p = (nfc_tag_fmcos_file_t*)m_tag_info->memory; p != NULL; p = p->next) {
                 if (p->file_type == NFC_TAG_FMCOS_FILE_TYPE_DIR_FCI && p->df_id == m_tag_df) {
@@ -260,9 +256,13 @@ void nfc_tag_fmcos_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                 case 0xB0: fmcos_read_binary(rx_frame.p_inf, rx_frame.inf_size, &p_inf_end); break;
                 case 0x84: fmcos_get_challenge(rx_frame.p_inf, rx_frame.inf_size, &p_inf_end); break;
                 default:
-                    tx_frame.p_inf[0] = 0x90; tx_frame.p_inf[1] = 0x00;
-                    tx_frame.inf_size = 2;
+                    *p_inf_end = 0x90; ++p_inf_end;
+                    *p_inf_end = 0x00; ++p_inf_end;
+                    // tx_frame.p_inf[0] = 0x90; tx_frame.p_inf[1] = 0x00;
+                    // tx_frame.inf_size = 2;
             }
+
+            tx_frame.inf_size = p_inf_end - inf_buffer;
             break;
         }
         case NFC_14A_BLOCK_TYPE_R:
@@ -455,6 +455,30 @@ bool fmcos_clone_reader_send(nfc_14a_frame_t *tx_frame, nfc_14a_frame_t *rx_fram
     if (!nfc_14a_decode_frame(rx_buffer, rx_len, rx_frame)) return false;
     tx_frame->pcb_info->block_num ^= 1;
 
+    return true;
+}
+
+bool fmcos_clone_read_binary_file(uint8_t len, nfc_14a_frame_t *tx_frame, nfc_14a_frame_t *rx_frame) {
+    tx_frame->pcb_info->block_type = NFC_14A_BLOCK_TYPE_I;
+    tx_frame->pcb_info->i_chaining = false;
+    memcpy(tx_frame->p_inf, (uint8_t[]){0x00, 0xB0, 0x00, 0x00, len}, 5);
+    tx_frame->inf_size = 5;
+
+    uint8_t *rx_inf_buffer = rx_frame->p_inf;
+    do {
+        bool ok = fmcos_clone_reader_send(tx_frame, rx_frame);
+        if (!ok) return false;
+
+        tx_frame->pcb_info->block_type = NFC_14A_BLOCK_TYPE_R;
+        tx_frame->pcb_info->r_nak = false;
+        tx_frame->pcb_info->r_ack = true;
+        tx_frame->inf_size = 0;
+        rx_frame->p_inf += rx_frame->inf_size;
+        rx_frame->inf_size = 0;
+    } while(rx_frame->pcb_info->block_type == NFC_14A_BLOCK_TYPE_I && rx_frame->pcb_info->i_chaining);
+
+    rx_frame->inf_size += rx_frame->p_inf - rx_inf_buffer;
+    rx_frame->p_inf = rx_inf_buffer;
     if (rx_frame->p_inf[rx_frame->inf_size-2] == 0x90 && rx_frame->p_inf[rx_frame->inf_size-1] == 0x00) {
         return true;
     } else {
@@ -462,21 +486,23 @@ bool fmcos_clone_reader_send(nfc_14a_frame_t *tx_frame, nfc_14a_frame_t *rx_fram
     }
 }
 
-bool fmcos_clone_read_binary_file(uint8_t len, nfc_14a_frame_t *tx_frame, nfc_14a_frame_t *rx_frame) {
-    memcpy(tx_frame->p_inf, (uint8_t[]){0x00, 0xB0, 0x00, 0x00, len}, 5);
-    tx_frame->inf_size = 5;
-    return fmcos_clone_reader_send(tx_frame, rx_frame);
-}
-
 bool fmcos_clone_select_file(uint16_t df_idx, nfc_14a_frame_t *tx_frame, nfc_14a_frame_t *rx_frame) {
-    uint8_t *inf_buffer = tx_frame->p_inf;
+    tx_frame->pcb_info->block_type = NFC_14A_BLOCK_TYPE_I;
+    tx_frame->pcb_info->i_chaining = false;
 
-    memcpy(inf_buffer, (uint8_t[]){0x00, 0xA4, 0x00, 0x00, 0x02, 0x3F, 0x00}, 7);
-    inf_buffer[5] = df_idx >> 8;
-    inf_buffer[6] = df_idx & 0xFF;
+    memcpy(tx_frame->p_inf, (uint8_t[]){0x00, 0xA4, 0x00, 0x00, 0x02, 0x3F, 0x00}, 7);
+    tx_frame->p_inf[5] = df_idx >> 8;
+    tx_frame->p_inf[6] = df_idx & 0xFF;
     tx_frame->inf_size = 7;
 
-    return fmcos_clone_reader_send(tx_frame, rx_frame);
+    bool ok = fmcos_clone_reader_send(tx_frame, rx_frame);
+    if (!ok) return false;
+    
+    if (rx_frame->p_inf[rx_frame->inf_size-2] == 0x90 && rx_frame->p_inf[rx_frame->inf_size-1] == 0x00) {
+        return true;
+    } else {
+        return false;
+    }
 }
 
 bool fmcos_clone_zjzy(nfc_tag_fmcos_information_t * tag_info) {
@@ -515,7 +541,7 @@ bool fmcos_clone_zjzy(nfc_tag_fmcos_information_t * tag_info) {
 
     bool ok = fmcos_clone_select_file(0x3F00, &tx_frame, &rx_frame);
     if (ok) {
-        fmcos_add_file(tag_info, 0x3F00, 0xFFFF, NFC_TAG_FMCOS_FILE_TYPE_DIR_FCI, rx_frame.p_inf, rx_frame.inf_size);
+        fmcos_add_file(tag_info, 0x3F00, 0xFFFF, NFC_TAG_FMCOS_FILE_TYPE_DIR_FCI, rx_frame.p_inf, rx_frame.inf_size - 2); // don't store sw1 and sw2
         fmcos_add_file(tag_info, 0x3F00, 0xFFFE, NFC_TAG_FMCOS_FILE_TYPE_DIR_NAME, (uint8_t[]){"1PAY.SYS.DDF01"}, 14);
         nrf_gpio_pin_set(led_array[2]);
     }
@@ -523,7 +549,7 @@ bool fmcos_clone_zjzy(nfc_tag_fmcos_information_t * tag_info) {
 
     ok = fmcos_clone_select_file(0x7F03, &tx_frame, &rx_frame);
     if (ok) {
-        fmcos_add_file(tag_info, 0x7F03, 0xFFFF, NFC_TAG_FMCOS_FILE_TYPE_DIR_FCI, rx_frame.p_inf, rx_frame.inf_size);
+        fmcos_add_file(tag_info, 0x7F03, 0xFFFF, NFC_TAG_FMCOS_FILE_TYPE_DIR_FCI, rx_frame.p_inf, rx_frame.inf_size - 2);
         fmcos_add_file(tag_info, 0x7F03, 0xFFFE, NFC_TAG_FMCOS_FILE_TYPE_DIR_NAME, (uint8_t[]){0xD5, 0xFD, 0xD4, 0xAA, 0xD6, 0xC7, 0xBB, 0xDB, 0xD2, 0xD7, 0xCD, 0xA8, 0x15, 0x01}, 14);
         nrf_gpio_pin_set(led_array[3]);
     }
@@ -536,8 +562,10 @@ bool fmcos_clone_zjzy(nfc_tag_fmcos_information_t * tag_info) {
         if (ok) {
             ok = fmcos_clone_read_binary_file(ef_lens[i], &tx_frame, &rx_frame);
             if(ok) {
-                fmcos_add_file(tag_info, 0x7F03, ef_ids[i], NFC_TAG_FMCOS_FILE_TYPE_BINARY, rx_frame.p_inf, rx_frame.inf_size);
+                fmcos_add_file(tag_info, 0x7F03, ef_ids[i], NFC_TAG_FMCOS_FILE_TYPE_BINARY, rx_frame.p_inf, rx_frame.inf_size - 2);
                 nrf_gpio_pin_set(led_array[i+4]);
+            } else {
+                return false;
             }
         }
     }
@@ -568,7 +596,7 @@ bool nfc_tag_fmcos_clone(tag_specific_type_t type, tag_data_buffer_t *buffer) {
     bool hf_copy_succeeded = false;
     uint8_t status = pcd_14a_reader_scan_auto(&tag);
     // above does pcd_14a_reader_ats_request()
-    // FSD=256, FSDI=8, CID=0
+    // FSD=64, FSDI=5, CID=0
     if (status == STATUS_HF_TAG_OK) {
         // copy uid
         tag_info->res_coll.size = tag.uid_len;
