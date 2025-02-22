@@ -822,8 +822,10 @@ uint8_t pcd_14a_reader_scan_auto(picc_14a_tag_t *tag) {
 * @retval : Status value hf_tag_ok, success
 */
 uint8_t pcd_14a_reader_ats_request(uint8_t *pAts, uint16_t *szAts, uint16_t szAtsBitMax) {
-    uint8_t rats[] = { PICC_RATS, 0x80, 0x31, 0x73 }; // FSD=256, FSDI=8, CID=0
+    // uint8_t rats[] = { PICC_RATS, 0x80, 0x31, 0x73 }; // FSD=256, FSDI=8, CID=0
+    uint8_t rats[] = { PICC_RATS, 0x50, 0x00, 0x00 }; // Sir, RC522 only has 64*8 bits of FIFO buffer, FSD=64
     uint8_t status;
+    crc_14a_append(rats, 2);
 
     status = pcd_14a_reader_bytes_transfer(PCD_TRANSCEIVE, rats, sizeof(rats), pAts, szAts, szAtsBitMax);
 
