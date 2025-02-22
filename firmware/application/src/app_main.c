@@ -668,6 +668,11 @@ static void btn_fn_copy_ic_uid(void) {
         case TAG_TYPE_FMCOS_ZJZY: {
             hf_copy_succeeded = nfc_tag_fmcos_clone(tag_types.tag_hf, buffer);
             antres = NULL;
+            if (hf_copy_succeeded) {
+                offline_status_ok();
+            } else {
+                offline_status_error();
+            }
             break;
         }
 

@@ -9,8 +9,8 @@ inline bool pcb_has_cid(uint8_t pcb) {
     return (pcb & 0x08) == 0x08;
 }
 
-nfc_14a_pcb_info_t nfc_14a_decode_pcb(uint8_t pcb) {
-    nfc_14a_pcb_info_t info = {
+void nfc_14a_decode_pcb(uint8_t pcb, nfc_14a_pcb_info_t *p_info) {
+    *p_info = (nfc_14a_pcb_info_t){
         .block_num = pcb_block_num(pcb),
         .has_cid = pcb_has_cid(pcb),
         .has_nad = false,
@@ -23,22 +23,22 @@ nfc_14a_pcb_info_t nfc_14a_decode_pcb(uint8_t pcb) {
     };
 
 
-    switch (info.block_type)
+    switch (p_info->block_type)
     {
     case NFC_14A_BLOCK_TYPE_I:
-        info.i_chaining = (pcb & 0x10) == 0x10;
+        p_info->i_chaining = (pcb & 0x10) == 0x10;
         break;
     case NFC_14A_BLOCK_TYPE_R:
-        info.r_ack = (pcb & 0x10) == 0x00;
-        info.r_nak = (pcb & 0x20) == 0x20;
+        p_info->r_ack = (pcb & 0x10) == 0x00;
+        p_info->r_nak = (pcb & 0x20) == 0x20;
         break;
     case NFC_14A_BLOCK_TYPE_S:
-        info.s_deselect = (pcb & 0x30) == 0x00;
-        info.s_wtx = (pcb & 0x30) == 0x30;
+        p_info->s_deselect = (pcb & 0x30) == 0x00;
+        p_info->s_wtx = (pcb & 0x30) == 0x30;
         break;
     }
     
-    return info;
+    return;
 }
 
 uint8_t nfc_14a_encode_pcb(nfc_14a_pcb_info_t* p_pcb_info) {
@@ -92,7 +92,18 @@ uint16_t nfc_14a_get_frame_size(nfc_14a_frame_t *p_frame, bool has_crc) {
 }
 
 bool nfc_14a_decode_frame(uint8_t *p_buf, uint16_t cb_buf, nfc_14a_frame_t *p_frame) {
+    // here cb_buf should not include CRC
+    nfc_14a_decode_pcb(p_buf, p_frame->pcb_info); p_buf++; cb_buf--;
+    if (p_frame->pcb_info->has_cid) {
+        p_frame->cid = *p_buf; p_buf++; cb_buf--;
+    }
 
+    if (p_frame->pcb_info->has_nad) {
+        p_frame->nad = *p_buf; p_buf++; cb_buf--;
+    }
+
+    p_frame->inf_size = cb_buf; // the rest of buffer
+    return true; // maybe we should check cb_buf haha
 }
 
 bool nfc_14a_encode_frame(nfc_14a_frame_t *p_frame, uint8_t* p_buf, uint16_t* cb_buf) {

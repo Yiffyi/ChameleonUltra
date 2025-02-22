@@ -37,7 +37,7 @@ typedef struct {
     uint8_t *p_inf;
 } nfc_14a_frame_t;
 
-nfc_14a_pcb_info_t nfc_14a_decode_pcb(uint8_t pcb);
+void nfc_14a_decode_pcb(uint8_t pcb, nfc_14a_pcb_info_t *p_info);
 uint8_t nfc_14a_encode_pcb(nfc_14a_pcb_info_t* p_pcb_info);
 
 uint16_t nfc_14a_get_frame_size(nfc_14a_frame_t *p_frame, bool has_crc);
