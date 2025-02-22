@@ -63,7 +63,7 @@ void fmcos_select_file(uint8_t *p_cmd, uint16_t cb_cmd, uint8_t **pp_inf_end) {
                 break;
             }
         }
-    } else if (p1 == 0x40 && p2 == 0x00 && aid_len > 0) {
+    } else if (p1 == 0x04 && p2 == 0x00 && aid_len > 0) {
         nfc_tag_fmcos_file_t *p;
         for(p = (nfc_tag_fmcos_file_t*)m_tag_info->memory; p != NULL; p = p->next) {
             if (p->file_type == NFC_TAG_FMCOS_FILE_TYPE_DIR_NAME && aid_len == p->value_size && memcmp(p->value, aid, p->value_size) == 0) {
@@ -126,7 +126,7 @@ void fmcos_read_binary(uint8_t *p_cmd, uint16_t cb_cmd, uint8_t **pp_inf_end) {
         file = m_tag_file;
     } else {
         for(nfc_tag_fmcos_file_t *p = (nfc_tag_fmcos_file_t*)m_tag_info->memory; p != NULL; p = p->next) {
-            if (p->df_id == m_tag_df && p->ef_id == ef_idx && m_tag_file ->file_type == NFC_TAG_FMCOS_FILE_TYPE_BINARY) { // is EF
+            if (p->df_id == m_tag_df && p->ef_id == ef_idx && p->file_type == NFC_TAG_FMCOS_FILE_TYPE_BINARY) { // is EF
                 file = p;
                 break;
             }
@@ -134,7 +134,7 @@ void fmcos_read_binary(uint8_t *p_cmd, uint16_t cb_cmd, uint8_t **pp_inf_end) {
     }
 
     if (file) {
-        if (offset + le > file->value_size - 2) { // too much
+        if (offset + le > file->value_size) { // too much
             *p_inf_end = 0x6B; p_inf_end++;
             *p_inf_end = 0x00; p_inf_end++;
         } else {
@@ -464,7 +464,8 @@ bool fmcos_clone_read_binary_file(uint8_t len, nfc_14a_frame_t *tx_frame, nfc_14
     memcpy(tx_frame->p_inf, (uint8_t[]){0x00, 0xB0, 0x00, 0x00, len}, 5);
     tx_frame->inf_size = 5;
 
-    uint8_t *rx_inf_buffer = rx_frame->p_inf;
+    static uint8_t rx_inf_buffer[NFC_TAG_FMCOS_MAX_RESP_SIZE];
+    uint8_t inf_size = 0;
     do {
         bool ok = fmcos_clone_reader_send(tx_frame, rx_frame);
         if (!ok) return false;
@@ -473,12 +474,13 @@ bool fmcos_clone_read_binary_file(uint8_t len, nfc_14a_frame_t *tx_frame, nfc_14
         tx_frame->pcb_info->r_nak = false;
         tx_frame->pcb_info->r_ack = true;
         tx_frame->inf_size = 0;
-        rx_frame->p_inf += rx_frame->inf_size;
-        rx_frame->inf_size = 0;
+
+        memcpy(rx_inf_buffer + inf_size, rx_frame->p_inf, rx_frame->inf_size);
+        inf_size += rx_frame->inf_size;
     } while(rx_frame->pcb_info->block_type == NFC_14A_BLOCK_TYPE_I && rx_frame->pcb_info->i_chaining);
 
-    rx_frame->inf_size += rx_frame->p_inf - rx_inf_buffer;
     rx_frame->p_inf = rx_inf_buffer;
+    rx_frame->inf_size = inf_size;
     if (rx_frame->p_inf[rx_frame->inf_size-2] == 0x90 && rx_frame->p_inf[rx_frame->inf_size-1] == 0x00) {
         return true;
     } else {
@@ -519,7 +521,7 @@ bool fmcos_clone_zjzy(nfc_tag_fmcos_information_t * tag_info) {
     nfc_14a_pcb_info_t tx_pcb = {
         .has_cid = false,
         .has_nad = false,
-        .block_num = 1 // is this one?
+        .block_num = 0 // reader: start at 0
     };
     nfc_14a_frame_t tx_frame = {
         .pcb_info = &tx_pcb,
@@ -534,7 +536,7 @@ bool fmcos_clone_zjzy(nfc_tag_fmcos_information_t * tag_info) {
     nfc_14a_frame_t rx_frame = {
         .pcb_info = &rx_pcb,
         .inf_size = 0,
-        .p_inf = tx_inf_buffer
+        .p_inf = NULL
     };
 
     memset(tag_info->memory, 0, sizeof(tag_info->memory));
