@@ -665,6 +665,12 @@ static void btn_fn_copy_ic_uid(void) {
             break;
         }
 
+        case TAG_TYPE_FMCOS_ZJZY: {
+            hf_copy_succeeded = nfc_tag_fmcos_clone(tag_types.tag_hf, buffer);
+            antres = NULL;
+            break;
+        }
+
         case TAG_TYPE_UNDEFINED:
             // empty HF slot, nothing to do
             break;
