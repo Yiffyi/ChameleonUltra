@@ -46,6 +46,7 @@ uint8_t nfc_14a_encode_pcb(nfc_14a_pcb_info_t* p_pcb_info) {
     pcb |= (p_pcb_info->has_cid & 0x01) << 3;
     pcb |= (p_pcb_info->has_nad & 0x01) << 2;
     pcb |= p_pcb_info->block_num & 0x01;
+    pcb |= 0x02; // RFU
 
     switch (p_pcb_info->block_type)
     {
@@ -55,6 +56,7 @@ uint8_t nfc_14a_encode_pcb(nfc_14a_pcb_info_t* p_pcb_info) {
         }
         break;
     case NFC_14A_BLOCK_TYPE_R:
+        pcb |= 0x20; // FMCOS2.0 document is wrong, see http://www.emutag.com/iso/14443-4.pdf
         if (p_pcb_info->r_ack) {
             pcb &= 0xef;
         }
