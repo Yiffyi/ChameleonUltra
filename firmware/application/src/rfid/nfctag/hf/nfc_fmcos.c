@@ -187,7 +187,7 @@ void fmcos_get_challenge(uint8_t *p_cmd, uint16_t cb_cmd, uint8_t **pp_inf_end) 
 
 void nfc_tag_fmcos_state_handler(uint8_t *p_data, uint16_t szDataBits) {
     static uint8_t tx_buffer[NFC_TAG_FMCOS_MAX_RESP_SIZE];
-    static uint16_t tx_len = 0;
+    static uint16_t tx_len = NFC_TAG_FMCOS_MAX_RESP_SIZE;
     // static uint8_t *p_tx = tx_buffer;
 
     static uint8_t inf_buffer[NFC_TAG_FMCOS_MAX_RESP_SIZE];
@@ -210,7 +210,7 @@ void nfc_tag_fmcos_state_handler(uint8_t *p_data, uint16_t szDataBits) {
         // p_inf = p_inf_end = inf_buffer; inf_inflight = 0;
         // p_tx = tx_buffer;
         p_inf_end = inf_buffer;
-        tx_len = 0;
+        tx_len = NFC_TAG_FMCOS_MAX_RESP_SIZE;
         
         tx_pcb.block_num = 1;
         tx_pcb.has_cid = false;
@@ -315,7 +315,7 @@ void nfc_tag_fmcos_state_handler(uint8_t *p_data, uint16_t szDataBits) {
         tx_pcb.i_chaining = false;
     }
 
-    nfc_14a_encode_frame(&tx_frame, tx_buffer, &tx_len);
+    if (!nfc_14a_encode_frame(&tx_frame, tx_buffer, &tx_len)) return;
     nfc_tag_14a_tx_bytes(tx_buffer, tx_len, true);
 
     // if (m_tag_info->config.respond_to_mifare_auth && cbData == 4 && (p_data[0] == MIFARE_AUTH_KEYA || p_data[0] == MIFARE_AUTH_KEYB)) {
@@ -436,17 +436,25 @@ bool fmcos_add_file(nfc_tag_fmcos_information_t *tag_info, uint16_t df_id, uint1
     return false;
 }
 
-bool fmcos_clone_read_binary_file(uint8_t len, nfc_14a_frame_t *tx_frame, nfc_14a_frame_t *rx_frame, uint8_t *tx_buffer, uint16_t *tx_len, uint8_t *rx_buffer, uint16_t *rx_len) {
-    memcpy(tx_frame->p_inf, (uint8_t[]){0x00, 0xB0, 0x00, 0x00, len}, 5);
-    tx_frame->inf_size = 5;
+bool fmcos_clone_reader_send(nfc_14a_frame_t *tx_frame, nfc_14a_frame_t *rx_frame) {
+    static uint8_t tx_buffer[NFC_TAG_FMCOS_MAX_RESP_SIZE];
+    static uint8_t rx_buffer[NFC_TAG_FMCOS_MAX_RESP_SIZE];
+    uint16_t rx_len = NFC_TAG_FMCOS_MAX_RESP_SIZE;
+    uint16_t tx_len = NFC_TAG_FMCOS_MAX_RESP_SIZE;
 
-    if (!nfc_14a_encode_frame(tx_frame, tx_buffer, tx_len)) return false;
-    uint8_t status = pcd_14a_reader_bytes_transfer(PCD_TRANSCEIVE, tx_buffer, *tx_len, rx_buffer, rx_len, U8ARR_BIT_LEN(*rx_len));
+    if (!nfc_14a_encode_frame(tx_frame, tx_buffer, &tx_len)) return false;
+    crc_14a_append(tx_buffer, tx_len); tx_len += 2;
+
+    uint8_t status = pcd_14a_reader_bytes_transfer(PCD_TRANSCEIVE, tx_buffer, tx_len, rx_buffer, &rx_len, U8ARR_BIT_LEN(rx_len));
     if (status != STATUS_HF_TAG_OK) return false;
-    if (!nfc_tag_14a_checks_crc(rx_buffer, *rx_len)) return false;
-    *rx_len -= 2; // we don't care CRC
-    if (!nfc_14a_decode_frame(rx_buffer, *rx_len, rx_frame)) return false;
+    rx_len >>= 3; // bits -> bytes
+
+    if (!nfc_tag_14a_checks_crc(rx_buffer, rx_len)) return false;
+    rx_len -= 2; // we don't care CRC
+
+    if (!nfc_14a_decode_frame(rx_buffer, rx_len, rx_frame)) return false;
     tx_frame->pcb_info->block_num ^= 1;
+
     if (rx_frame->p_inf[rx_frame->inf_size-2] == 0x90 && rx_frame->p_inf[rx_frame->inf_size-1] == 0x00) {
         return true;
     } else {
@@ -454,7 +462,13 @@ bool fmcos_clone_read_binary_file(uint8_t len, nfc_14a_frame_t *tx_frame, nfc_14
     }
 }
 
-bool fmcos_clone_select_file(uint16_t df_idx, nfc_14a_frame_t *tx_frame, nfc_14a_frame_t *rx_frame, uint8_t *tx_buffer, uint16_t *tx_len, uint8_t *rx_buffer, uint16_t *rx_len) {
+bool fmcos_clone_read_binary_file(uint8_t len, nfc_14a_frame_t *tx_frame, nfc_14a_frame_t *rx_frame) {
+    memcpy(tx_frame->p_inf, (uint8_t[]){0x00, 0xB0, 0x00, 0x00, len}, 5);
+    tx_frame->inf_size = 5;
+    return fmcos_clone_reader_send(tx_frame, rx_frame);
+}
+
+bool fmcos_clone_select_file(uint16_t df_idx, nfc_14a_frame_t *tx_frame, nfc_14a_frame_t *rx_frame) {
     uint8_t *inf_buffer = tx_frame->p_inf;
 
     memcpy(inf_buffer, (uint8_t[]){0x00, 0xA4, 0x00, 0x00, 0x02, 0x3F, 0x00}, 7);
@@ -462,35 +476,18 @@ bool fmcos_clone_select_file(uint16_t df_idx, nfc_14a_frame_t *tx_frame, nfc_14a
     inf_buffer[6] = df_idx & 0xFF;
     tx_frame->inf_size = 7;
 
-    if (!nfc_14a_encode_frame(tx_frame, tx_buffer, tx_len)) return false;
-    uint8_t status = pcd_14a_reader_bytes_transfer(PCD_TRANSCEIVE, tx_buffer, *tx_len, rx_buffer, rx_len, U8ARR_BIT_LEN(*rx_len));
-    if (status != STATUS_HF_TAG_OK) return false;
-
-    if (!nfc_tag_14a_checks_crc(rx_buffer, *rx_len)) return false;
-    *rx_len -= 2; // we don't care CRC
-    if (!nfc_14a_decode_frame(rx_buffer, *rx_len, rx_frame)) return false;
-    tx_frame->pcb_info->block_num ^= 1;
-    if (rx_frame->p_inf[rx_frame->inf_size-2] == 0x90 && rx_frame->p_inf[rx_frame->inf_size-1] == 0x00) {
-        return true;
-    } else {
-        return false;
-    }
+    return fmcos_clone_reader_send(tx_frame, rx_frame);
 }
 
 bool fmcos_clone_zjzy(nfc_tag_fmcos_information_t * tag_info) {
-    static uint8_t tx_buffer[NFC_TAG_FMCOS_MAX_RESP_SIZE];
-    static uint16_t tx_len = 0;
     static uint8_t tx_inf_buffer[NFC_TAG_FMCOS_MAX_RESP_SIZE];
-    static uint8_t rx_buffer[NFC_TAG_FMCOS_MAX_RESP_SIZE];
-    static uint16_t rx_len = 0;
 
-    
     // show progress by LED
     uint32_t *led_array = hw_get_led_array();
     for (int i = 0; i < RGB_LIST_NUM; i++) {
         nrf_gpio_pin_clear(led_array[i]);
     }
-    set_slot_light_color(RGB_MAGENTA);
+    set_slot_light_color(RGB_BLUE);
 
     // below are not static to reset block_num each time
     nfc_14a_pcb_info_t tx_pcb = {
@@ -514,64 +511,40 @@ bool fmcos_clone_zjzy(nfc_tag_fmcos_information_t * tag_info) {
         .p_inf = tx_inf_buffer
     };
 
-    bool ok = fmcos_clone_select_file(0x3F00, &tx_frame, &rx_frame, tx_buffer, &tx_len, rx_buffer, &rx_len);
+    memset(tag_info->memory, 0, sizeof(tag_info->memory));
+
+    bool ok = fmcos_clone_select_file(0x3F00, &tx_frame, &rx_frame);
     if (ok) {
         fmcos_add_file(tag_info, 0x3F00, 0xFFFF, NFC_TAG_FMCOS_FILE_TYPE_DIR_FCI, rx_frame.p_inf, rx_frame.inf_size);
         fmcos_add_file(tag_info, 0x3F00, 0xFFFE, NFC_TAG_FMCOS_FILE_TYPE_DIR_NAME, (uint8_t[]){"1PAY.SYS.DDF01"}, 14);
-    } else return false;
+        nrf_gpio_pin_set(led_array[2]);
+    }
 
-    nrf_gpio_pin_set(led_array[2]);
 
-    ok = fmcos_clone_select_file(0x7F03, &tx_frame, &rx_frame, tx_buffer, &tx_len, rx_buffer, &rx_len);
+    ok = fmcos_clone_select_file(0x7F03, &tx_frame, &rx_frame);
     if (ok) {
         fmcos_add_file(tag_info, 0x7F03, 0xFFFF, NFC_TAG_FMCOS_FILE_TYPE_DIR_FCI, rx_frame.p_inf, rx_frame.inf_size);
         fmcos_add_file(tag_info, 0x7F03, 0xFFFE, NFC_TAG_FMCOS_FILE_TYPE_DIR_NAME, (uint8_t[]){0xD5, 0xFD, 0xD4, 0xAA, 0xD6, 0xC7, 0xBB, 0xDB, 0xD2, 0xD7, 0xCD, 0xA8, 0x15, 0x01}, 14);
-    } else return false;
+        nrf_gpio_pin_set(led_array[3]);
+    }
 
-    nrf_gpio_pin_set(led_array[3]);
+    const uint16_t ef_ids[] = {0x0001, 0x0015, 0x0016, 0x0019};
+    const uint16_t ef_lens[] = {0x40, 0x60, 0x60, 0x40};
+    for(uint8_t i = 0; i < 4; i++) {
 
-    // 7F03/0001, le=0x40
-    ok = fmcos_clone_select_file(0x0001, &tx_frame, &rx_frame, tx_buffer, &tx_len, rx_buffer, &rx_len);
-    if (!ok) return false;
-    ok = fmcos_clone_read_binary_file(0x40, &tx_frame, &rx_frame, tx_buffer, &tx_len, rx_buffer, &rx_len);
-    if (!ok) return false;
-    fmcos_add_file(tag_info, 0x7F03, 0x0001, NFC_TAG_FMCOS_FILE_TYPE_BINARY, rx_frame.p_inf, rx_frame.inf_size);
-
-    nrf_gpio_pin_set(led_array[4]);
-
-    // 7F03/0015, le=0x60
-    ok = fmcos_clone_select_file(0x0015, &tx_frame, &rx_frame, tx_buffer, &tx_len, rx_buffer, &rx_len);
-    if (!ok) return false;
-    ok = fmcos_clone_read_binary_file(0x60, &tx_frame, &rx_frame, tx_buffer, &tx_len, rx_buffer, &rx_len);
-    if (!ok) return false;
-    fmcos_add_file(tag_info, 0x7F03, 0x0015, NFC_TAG_FMCOS_FILE_TYPE_BINARY, rx_frame.p_inf, rx_frame.inf_size);
-
-    nrf_gpio_pin_set(led_array[5]);
-
-    // 7F03/0016, le=0x60
-    ok = fmcos_clone_select_file(0x0016, &tx_frame, &rx_frame, tx_buffer, &tx_len, rx_buffer, &rx_len);
-    if (!ok) return false;
-    ok = fmcos_clone_read_binary_file(0x60, &tx_frame, &rx_frame, tx_buffer, &tx_len, rx_buffer, &rx_len);
-    if (!ok) return false;
-    fmcos_add_file(tag_info, 0x7F03, 0x0016, NFC_TAG_FMCOS_FILE_TYPE_BINARY, rx_frame.p_inf, rx_frame.inf_size);
-
-    nrf_gpio_pin_set(led_array[6]);
-
-    // 7F03/0019, le=0x40
-    ok = fmcos_clone_select_file(0x0019, &tx_frame, &rx_frame, tx_buffer, &tx_len, rx_buffer, &rx_len);
-    if (!ok) return false;
-    ok = fmcos_clone_read_binary_file(0x40, &tx_frame, &rx_frame, tx_buffer, &tx_len, rx_buffer, &rx_len);
-    if (!ok) return false;
-    fmcos_add_file(tag_info, 0x7F03, 0x0019, NFC_TAG_FMCOS_FILE_TYPE_BINARY, rx_frame.p_inf, rx_frame.inf_size);
-
-    nrf_gpio_pin_set(led_array[7]);
+        ok = fmcos_clone_select_file(ef_ids[i], &tx_frame, &rx_frame);
+        if (ok) {
+            ok = fmcos_clone_read_binary_file(ef_lens[i], &tx_frame, &rx_frame);
+            if(ok) {
+                fmcos_add_file(tag_info, 0x7F03, ef_ids[i], NFC_TAG_FMCOS_FILE_TYPE_BINARY, rx_frame.p_inf, rx_frame.inf_size);
+                nrf_gpio_pin_set(led_array[i+4]);
+            }
+        }
+    }
 
     // reset lights
     set_slot_light_color(RGB_GREEN);
-    for (int i = 0; i < RGB_LIST_NUM; i++) {
-        nrf_gpio_pin_clear(led_array[i]);
-    }
-    return true;
+    return ok;
 }
 
 bool nfc_tag_fmcos_clone(tag_specific_type_t type, tag_data_buffer_t *buffer) {
