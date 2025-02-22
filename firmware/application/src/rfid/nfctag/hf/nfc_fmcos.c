@@ -254,7 +254,7 @@ void nfc_tag_fmcos_state_handler(uint8_t *p_data, uint16_t szDataBits) {
             } else {
                 tx_pcb.has_cid = false;
             }
-            uint8_t ins = rx_frame.p_inf[0];
+            uint8_t ins = rx_frame.p_inf[1];
             switch(ins) {
                 case 0xA4: fmcos_select_file(rx_frame.p_inf, rx_frame.inf_size, &p_inf_end); break;
                 case 0xB0: fmcos_read_binary(rx_frame.p_inf, rx_frame.inf_size, &p_inf_end); break;
@@ -370,7 +370,7 @@ int nfc_tag_fmcos_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffe
 bool nfc_tag_fmcos_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     nfc_tag_fmcos_file_t mf = {
         .df_id = 0x3f00,
-        .ef_id = 0xffff,
+        .ef_id = 0xfffe,
         .file_type = NFC_TAG_FMCOS_FILE_TYPE_DIR_NAME,
         .next = NULL,
         .value_size = 16
@@ -445,7 +445,7 @@ bool fmcos_clone_reader_send(nfc_14a_frame_t *tx_frame, nfc_14a_frame_t *rx_fram
     if (!nfc_14a_encode_frame(tx_frame, tx_buffer, &tx_len)) return false;
     crc_14a_append(tx_buffer, tx_len); tx_len += 2;
 
-    uint8_t status = pcd_14a_reader_bytes_transfer(PCD_TRANSCEIVE, tx_buffer, tx_len, rx_buffer, &rx_len, U8ARR_BIT_LEN(rx_len));
+    uint8_t status = pcd_14a_reader_bytes_transfer(PCD_TRANSCEIVE, tx_buffer, tx_len, rx_buffer, &rx_len, U8ARR_BIT_LEN(rx_buffer));
     if (status != STATUS_HF_TAG_OK) return false;
     rx_len >>= 3; // bits -> bytes
 
