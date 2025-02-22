@@ -204,7 +204,7 @@ void nfc_tag_fmcos_state_handler(uint8_t *p_data, uint16_t szDataBits) {
     static nfc_14a_frame_t tx_frame = {
         .pcb_info = &tx_pcb,
         .inf_size = 0,
-        .p_inf = &inf_buffer
+        .p_inf = inf_buffer
     };
     if (p_data == NULL) {
         // p_inf = p_inf_end = inf_buffer; inf_inflight = 0;
@@ -219,7 +219,7 @@ void nfc_tag_fmcos_state_handler(uint8_t *p_data, uint16_t szDataBits) {
         tx_frame.cid = 0;
         tx_frame.nad = 0;
         tx_frame.inf_size = 0;
-        tx_frame.p_inf = &inf_buffer;
+        tx_frame.p_inf = inf_buffer;
         tx_frame.pcb_info = &tx_pcb;
 
         m_tag_df = 0x3F00;
@@ -229,7 +229,10 @@ void nfc_tag_fmcos_state_handler(uint8_t *p_data, uint16_t szDataBits) {
     }
 
     uint16_t cbData = szDataBits >> 3;
-    if (cbData < 1) return;
+    if (cbData < 3) return; // min: 1 for PCB, 2 for CRC
+
+    if (!nfc_tag_14a_checks_crc(p_data, cbData)) return;
+    cbData -= 2; // we don't care CRC
 
     nfc_14a_pcb_info_t rx_pcb;
     nfc_14a_frame_t rx_frame = {
@@ -242,6 +245,9 @@ void nfc_tag_fmcos_state_handler(uint8_t *p_data, uint16_t szDataBits) {
         case NFC_14A_BLOCK_TYPE_I:
         {
             tx_pcb.block_num ^= 1;
+            tx_frame.p_inf = inf_buffer;
+            p_inf_end = inf_buffer;
+
             if (rx_pcb.has_cid) { // this is not good
                 tx_pcb.has_cid = true;
                 tx_frame.cid = rx_frame.cid;
@@ -262,6 +268,7 @@ void nfc_tag_fmcos_state_handler(uint8_t *p_data, uint16_t szDataBits) {
         case NFC_14A_BLOCK_TYPE_R:
         {
             if (tx_pcb.block_num != rx_pcb.block_num) {
+                
                 if (rx_pcb.has_cid) { // this is not good
                     tx_pcb.has_cid = true;
                     tx_frame.cid = rx_frame.cid;
@@ -283,6 +290,8 @@ void nfc_tag_fmcos_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                     tx_pcb.block_type = NFC_14A_BLOCK_TYPE_R;
                     tx_pcb.r_ack = true;
                     tx_pcb.r_nak = false;
+                    tx_frame.p_inf = inf_buffer;
+                    tx_frame.inf_size = 0;
                 }
             } else {
                 // resend
@@ -435,11 +444,10 @@ bool nfc_tag_fmcos_clone(tag_specific_type_t type, tag_data_buffer_t *buffer) {
         memcpy(tag_info->res_coll.ats.data, tag.ats, tag.ats_len);
         NRF_LOG_INFO("Offline HF uid copied")
         hf_copy_succeeded = true;
-        offline_status_ok();
     } else {
         NRF_LOG_INFO("No HF tag found");
-        offline_status_error();
     }
 
     pcd_14a_reader_antenna_off();
+    return hf_copy_succeeded;
 }
