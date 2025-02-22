@@ -9,7 +9,7 @@
 #define NFC_TAG_14A_CRC_LENGTH  2
 
 // Whether to automatically remove the coupling school test (hardware removed)
-#define NFC_TAG_14A_RX_PARITY_AUTO_DEL_ENABLE  0
+#define NFC_TAG_14A_RX_PARITY_AUTO_DEL_ENABLE 1
 
 #define NFC_TAG_14A_CASCADE_CT  0x88
 
