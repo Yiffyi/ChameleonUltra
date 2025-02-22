@@ -9,6 +9,7 @@
 #include "nfc_14a.h"
 #include "nfc_mf1.h"
 #include "nfc_mf0_ntag.h"
+#include "nfc_fmcos.h"
 #include "lf_tag_em.h"
 #include "tag_emulation.h"
 

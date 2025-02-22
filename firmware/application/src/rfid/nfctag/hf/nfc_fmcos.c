@@ -1,7 +1,9 @@
 #include <stdlib.h>
 
+#include "rfid_main.h"
 #include "nfc_fmcos.h"
 #include "nfc_14a.h"
+#include "iso14a_ext.h"
 #include "hex_utils.h"
 #include "fds_util.h"
 #include "tag_persistence.h"
@@ -184,20 +186,41 @@ void fmcos_get_challenge(uint8_t *p_cmd, uint16_t cb_cmd, uint8_t **pp_inf_end) 
 }
 
 void nfc_tag_fmcos_state_handler(uint8_t *p_data, uint16_t szDataBits) {
-    static uint8_t tx_buffer[64];
-    static uint8_t *p_tx = tx_buffer;
+    static uint8_t tx_buffer[NFC_TAG_FMCOS_MAX_RESP_SIZE];
+    static uint16_t tx_len = 0;
+    // static uint8_t *p_tx = tx_buffer;
 
     static uint8_t inf_buffer[NFC_TAG_FMCOS_MAX_RESP_SIZE];
-    static uint8_t inf_inflight = 0;
+    // static uint8_t inf_inflight = 0;
     static uint8_t *p_inf_end = inf_buffer;
-    static uint8_t *p_inf = inf_buffer;
+    // static uint8_t *p_inf = inf_buffer;
 
-    static uint8_t tx_blk_idx = 1;
+    static nfc_14a_pcb_info_t tx_pcb = {
+        .has_cid = false,
+        .has_nad = false,
+        .block_num = 1
+    };
 
+    static nfc_14a_frame_t tx_frame = {
+        .pcb_info = &tx_pcb,
+        .inf_size = 0,
+        .p_inf = &inf_buffer
+    };
     if (p_data == NULL) {
-        p_inf = p_inf_end = inf_buffer; inf_inflight = 0;
-        p_tx = tx_buffer;
-        tx_blk_idx = 1;
+        // p_inf = p_inf_end = inf_buffer; inf_inflight = 0;
+        // p_tx = tx_buffer;
+        p_inf_end = inf_buffer;
+        tx_len = 0;
+        
+        tx_pcb.block_num = 1;
+        tx_pcb.has_cid = false;
+        tx_pcb.has_nad = false;
+
+        tx_frame.cid = 0;
+        tx_frame.nad = 0;
+        tx_frame.inf_size = 0;
+        tx_frame.p_inf = &inf_buffer;
+        tx_frame.pcb_info = &tx_pcb;
 
         m_tag_df = 0x3F00;
         m_tag_ef = 0x0000;
@@ -208,89 +231,83 @@ void nfc_tag_fmcos_state_handler(uint8_t *p_data, uint16_t szDataBits) {
     uint16_t cbData = szDataBits >> 3;
     if (cbData < 1) return;
 
-    uint8_t rx_blk_idx = p_data[0] & 0x01;
-    uint8_t rx_use_cid = p_data[0] & 0x08;
+    nfc_14a_pcb_info_t rx_pcb;
+    nfc_14a_frame_t rx_frame = {
+        .pcb_info = &rx_pcb,
+    };
+    if (!nfc_14a_decode_frame(p_data, cbData, &rx_frame)) return;
 
-    switch(p_data[0] & 0xC0) { // type of block
-        case ISO14443A_IBLOCK:
+
+    switch(rx_frame.pcb_info->block_type) {
+        case NFC_14A_BLOCK_TYPE_I:
         {
-            p_inf = p_inf_end = inf_buffer; inf_inflight = 0;
-            tx_blk_idx ^= 0x01;
-            tx_buffer[0] = (p_data[0] & 0xEE) | tx_blk_idx;
-            p_tx = tx_buffer;
-
-            uint8_t *p_cmd;
-            uint16_t cb_cmd;
-            if (rx_use_cid) {
-                p_cmd = p_data + 2;
-                cb_cmd = cbData - 2;
+            tx_pcb.block_num ^= 1;
+            if (rx_pcb.has_cid) { // this is not good
+                tx_pcb.has_cid = true;
+                tx_frame.cid = rx_frame.cid;
             } else {
-                p_cmd = p_data + 1;
-                cb_cmd = cbData - 1;
+                tx_pcb.has_cid = false;
             }
-            uint8_t ins = p_data[1];
+            uint8_t ins = rx_frame.p_inf[0];
             switch(ins) {
-                case 0xA4: fmcos_select_file(p_cmd, cb_cmd, &p_inf_end); break;
-                case 0xB0: fmcos_read_binary(p_cmd, cb_cmd, &p_inf_end); break;
-                case 0x84: fmcos_get_challenge(p_cmd, cb_cmd, &p_inf_end); break;
+                case 0xA4: fmcos_select_file(rx_frame.p_inf, rx_frame.inf_size, &p_inf_end); break;
+                case 0xB0: fmcos_read_binary(rx_frame.p_inf, rx_frame.inf_size, &p_inf_end); break;
+                case 0x84: fmcos_get_challenge(rx_frame.p_inf, rx_frame.inf_size, &p_inf_end); break;
                 default:
-                    inf_buffer[0] = 0x90; inf_buffer[1] = 0x00;
-                    p_inf_end = inf_buffer + 2;
+                    tx_frame.p_inf[0] = 0x90; tx_frame.p_inf[1] = 0x00;
+                    tx_frame.inf_size = 2;
             }
+            break;
         }
-        case ISO14443A_RBLOCK:
+        case NFC_14A_BLOCK_TYPE_R:
         {
-            if (tx_blk_idx == rx_blk_idx) {
-                // missed, resend
-            } else {
-                switch(p_data[0] & 0xF0) {
-                    case ISO14443A_R_ACK:
-                    {
-                        tx_blk_idx ^= 0x01;
-                        tx_buffer[0] =  0x12 | tx_blk_idx; // I chained
-                        p_inf += inf_inflight; inf_inflight = 0;
-                        p_tx = tx_buffer;
-                    }
-                    case ISO14443A_R_NAK:
-                    {
-                        tx_buffer[0] =  0xA2 | tx_blk_idx; // R(ACK)
-                        p_inf = p_inf_end = inf_buffer; inf_inflight = 0;
-                        p_tx = tx_buffer;
-                    }
+            if (tx_pcb.block_num != rx_pcb.block_num) {
+                if (rx_pcb.has_cid) { // this is not good
+                    tx_pcb.has_cid = true;
+                    tx_frame.cid = rx_frame.cid;
+                } else {
+                    tx_pcb.has_cid = false;
                 }
 
-            }
-        }
-    }
+                if (rx_pcb.r_ack) {
+                    tx_pcb.block_num ^= 1;
+                    if (tx_pcb.block_type == NFC_14A_BLOCK_TYPE_I && tx_pcb.i_chaining) {
+                        tx_frame.p_inf += tx_frame.inf_size;
+                        tx_frame.inf_size = p_inf_end - tx_frame.p_inf; // later code will determine if further chaining is needed
+                    }
+                    // tx_pcb.block_type = NFC_14A_BLOCK_TYPE_I;
+                    // tx_pcb.i_chaining = true;
+                }
 
-    if (p_tx == tx_buffer) { // if this is a new buffer
-        if (rx_use_cid) {
-            tx_buffer[0] |= 0x08; // set CID
-            tx_buffer[1] = p_data[1];
-            p_tx = tx_buffer + 2;
-        } else {
-            tx_buffer[0] &= 0xF7; // unset CID
-            p_tx = tx_buffer + 1;
+                if (rx_pcb.r_nak) {
+                    tx_pcb.block_type = NFC_14A_BLOCK_TYPE_R;
+                    tx_pcb.r_ack = true;
+                    tx_pcb.r_nak = false;
+                }
+            } else {
+                // resend
+            }
+            break;
+        }
+        case NFC_14A_BLOCK_TYPE_S:
+        {
+            break;
         }
     }
 
     // process INF
     uint16_t fsd = nfc_tag_14a_get_pcd_fsd();
-    if ((p_tx - tx_buffer) + 2 + (p_inf_end - p_inf) > fsd) {
-        inf_inflight = fsd - (p_tx - tx_buffer);
-        memcpy(p_inf, p_tx, inf_inflight);
-        nfc_tag_14a_tx_bytes(tx_buffer, inf_inflight + (p_tx - tx_buffer), true);
-    } else if (p_inf_end > p_inf) {
-        inf_inflight = p_inf_end - p_inf;
-        memcpy(p_inf, p_tx, p_inf_end - p_inf);
-        nfc_tag_14a_tx_bytes(tx_buffer, inf_inflight + (p_tx - tx_buffer), true);
+    uint16_t total_resp_size = nfc_14a_get_frame_size(&tx_frame, true);
 
-        p_inf = p_inf_end = inf_buffer;
-        inf_inflight = 0;
-    } else if (p_tx > tx_buffer) {
-        nfc_tag_14a_tx_bytes(tx_buffer, p_tx - tx_buffer, true);
+    if (total_resp_size > fsd) {
+        tx_pcb.i_chaining = true;
+        tx_frame.inf_size -= total_resp_size - fsd;
+    } else {
+        tx_pcb.i_chaining = false;
     }
 
+    nfc_14a_encode_frame(&tx_frame, tx_buffer, &tx_len);
+    nfc_tag_14a_tx_bytes(tx_buffer, tx_len, true);
 
     // if (m_tag_info->config.respond_to_mifare_auth && cbData == 4 && (p_data[0] == MIFARE_AUTH_KEYA || p_data[0] == MIFARE_AUTH_KEYB)) {
 
@@ -303,10 +320,10 @@ void nfc_tag_fmcos_reset_handler() {
 
 int nfc_tag_fmcos_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
     if (m_tag_type == TAG_TYPE_FMCOS_ZJZY) {
-        // if (m_tag_info->config.mode_block_write == NFC_TAG_MF1_WRITE_SHADOW) {
-        //     NRF_LOG_INFO("The mf1 is shadow write mode.");
-        //     return 0;
-        // }
+        if (m_tag_info->config.mode_write == NFC_TAG_FMCOS_WRITE_SHADOW) {
+            NRF_LOG_INFO("The FMCOS is shadow write mode.");
+            return 0;
+        }
         // if (m_tag_info->config.mode_block_write == NFC_TAG_MF1_WRITE_SHADOW_REQ) {
         //     NRF_LOG_INFO("The mf1 will be set to shadow write mode.");
         //     m_tag_info->config.mode_block_write = NFC_TAG_MF1_WRITE_SHADOW;
@@ -381,4 +398,48 @@ bool nfc_tag_fmcos_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
         NRF_LOG_ERROR("Factory slot data error.");
     }
     return ret;
+}
+
+bool nfc_tag_fmcos_clone(tag_specific_type_t type, tag_data_buffer_t *buffer) {
+    int info_size = sizeof(nfc_tag_fmcos_information_t);
+    nfc_tag_fmcos_information_t * tag_info;
+    if (buffer->length >= info_size) {
+        tag_info = (nfc_tag_fmcos_information_t *)buffer->buffer;
+    } else {
+        return false;
+    }
+    bool is_reader_mode_now = get_device_mode() == DEVICE_MODE_READER;
+    if (!is_reader_mode_now) {
+        // finish HF reader initialization
+        pcd_14a_reader_reset();
+    }
+    pcd_14a_reader_antenna_on();
+    bsp_delay_ms(8);
+    // select a tag
+    picc_14a_tag_t tag;
+
+    bool hf_copy_succeeded = false;
+    uint8_t status = pcd_14a_reader_scan_auto(&tag);
+    // above does pcd_14a_reader_ats_request()
+    // FSD=256, FSDI=8, CID=0
+    if (status == STATUS_HF_TAG_OK) {
+        // copy uid
+        tag_info->res_coll.size = tag.uid_len;
+        memcpy(tag_info->res_coll.uid, tag.uid, tag.uid_len);
+        // copy atqa
+        memcpy(tag_info->res_coll.atqa, tag.atqa, 2);
+        // copy sak
+        tag_info->res_coll.sak[0] = tag.sak;
+        // copy ats
+        tag_info->res_coll.ats.length = tag.ats_len;
+        memcpy(tag_info->res_coll.ats.data, tag.ats, tag.ats_len);
+        NRF_LOG_INFO("Offline HF uid copied")
+        hf_copy_succeeded = true;
+        offline_status_ok();
+    } else {
+        NRF_LOG_INFO("No HF tag found");
+        offline_status_error();
+    }
+
+    pcd_14a_reader_antenna_off();
 }

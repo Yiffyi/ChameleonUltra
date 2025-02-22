@@ -51,4 +51,6 @@ typedef struct __attribute__((aligned(4))) {
 int nfc_tag_fmcos_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer);
 int nfc_tag_fmcos_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer);
 bool nfc_tag_fmcos_data_factory(uint8_t slot, tag_specific_type_t tag_type);
+
+bool nfc_tag_fmcos_clone(tag_specific_type_t type, tag_data_buffer_t *buffer);
 #endif
