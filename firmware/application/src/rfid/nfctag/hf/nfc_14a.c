@@ -406,6 +406,30 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
         }
         return;
     }
+    
+    // Show state by LED
+    uint32_t *led_array = hw_get_led_array();
+    for (int i = 0; i < RGB_LIST_NUM; i++) {
+        nrf_gpio_pin_clear(led_array[i]);
+    }
+    switch (m_tag_state_14a) {
+        case NFC_TAG_STATE_14A_IDLE: {
+            nrf_gpio_pin_set(led_array[4]);
+            break;
+        }
+        case NFC_TAG_STATE_14A_HALTED: {
+            nrf_gpio_pin_set(led_array[5]);
+            break;
+        }
+        case NFC_TAG_STATE_14A_READY: {
+            nrf_gpio_pin_set(led_array[6]);
+            break;
+        }
+        case NFC_TAG_STATE_14A_ACTIVE: {
+            nrf_gpio_pin_set(led_array[7]);
+            break;
+        }
+    }
     //Make corresponding treatment according to the status of the current card
     switch (m_tag_state_14a) {
         // If you do not handle any tasks in the idle state and the dormant state, let the news from the stars go with the wind ~
