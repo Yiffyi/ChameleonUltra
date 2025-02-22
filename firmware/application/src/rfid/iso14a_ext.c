@@ -71,6 +71,8 @@ uint8_t nfc_14a_encode_pcb(nfc_14a_pcb_info_t* p_pcb_info) {
         }
         break;
     }
+
+    return pcb;
 }
 
 uint16_t nfc_14a_get_frame_size(nfc_14a_frame_t *p_frame, bool has_crc) {
@@ -93,7 +95,7 @@ uint16_t nfc_14a_get_frame_size(nfc_14a_frame_t *p_frame, bool has_crc) {
 
 bool nfc_14a_decode_frame(uint8_t *p_buf, uint16_t cb_buf, nfc_14a_frame_t *p_frame) {
     // here cb_buf should not include CRC
-    nfc_14a_decode_pcb(p_buf, p_frame->pcb_info); p_buf++; cb_buf--;
+    nfc_14a_decode_pcb(p_buf[0], p_frame->pcb_info); p_buf++; cb_buf--;
     if (p_frame->pcb_info->has_cid) {
         p_frame->cid = *p_buf; p_buf++; cb_buf--;
     }
@@ -106,7 +108,7 @@ bool nfc_14a_decode_frame(uint8_t *p_buf, uint16_t cb_buf, nfc_14a_frame_t *p_fr
     return true; // maybe we should check cb_buf haha
 }
 
-bool nfc_14a_encode_frame(nfc_14a_frame_t *p_frame, uint8_t* p_buf, uint16_t* cb_buf) {
+bool nfc_14a_encode_frame(nfc_14a_frame_t *p_frame, uint8_t* p_buf, uint16_t* p_cb_buf) {
     uint16_t cb_used = 1;
     p_buf[0] = nfc_14a_encode_pcb(p_frame->pcb_info);
 
@@ -118,13 +120,13 @@ bool nfc_14a_encode_frame(nfc_14a_frame_t *p_frame, uint8_t* p_buf, uint16_t* cb
         p_buf[cb_used++] = p_frame->nad;
     }
 
-    if (cb_used + p_frame->inf_size > cb_buf) {
-        *cb_buf = cb_used + p_frame->inf_size;
+    if (cb_used + p_frame->inf_size > *p_cb_buf) {
+        *p_cb_buf = cb_used + p_frame->inf_size;
         return false;
     } else {
         memcpy(p_buf+cb_used, p_frame->p_inf, p_frame->inf_size);
         cb_used += p_frame->inf_size;
-        *cb_buf = cb_used;
+        *p_cb_buf = cb_used;
         return true;
     }
 

@@ -23,6 +23,7 @@ SRC_FILES += \
   $(PROJ_DIR)/rfid/mf1_crapto1.c \
   $(PROJ_DIR)/rfid/mf1_crypto1.c \
   $(PROJ_DIR)/rfid/parity.c \
+  $(PROJ_DIR)/rfid/iso14a_ext.c \
   $(PROJ_DIR)/rfid/nfctag/tag_emulation.c \
   $(PROJ_DIR)/rfid/nfctag/tag_persistence.c \
   $(PROJ_DIR)/rfid/nfctag/hf/crypto1_helper.c \
