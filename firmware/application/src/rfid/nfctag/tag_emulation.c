@@ -71,14 +71,14 @@ static tag_slot_config_t slotConfig ALIGN_U32 = {
     // Configuration card slots
     // See tag_emulation_factory_init for actual tag content
     .slots = {
-        { .enabled_hf = true,  .enabled_lf = false, .tag_hf = TAG_TYPE_FMCOS_ZJZY,  .tag_lf = TAG_TYPE_UNDEFINED, },   // 1
-        { .enabled_hf = true,  .enabled_lf = false, .tag_hf = TAG_TYPE_FMCOS_ZJZY,  .tag_lf = TAG_TYPE_UNDEFINED, },   // 2
-        { .enabled_hf = false, .enabled_lf = false, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },   // 3
-        { .enabled_hf = false, .enabled_lf = false, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },   // 4
-        { .enabled_hf = false, .enabled_lf = false, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },   // 5
-        { .enabled_hf = false, .enabled_lf = false, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },   // 6
-        { .enabled_hf = false, .enabled_lf = false, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },   // 7
-        { .enabled_hf = false, .enabled_lf = false, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },   // 8
+        { .enabled_hf = true, .enabled_lf = false, .tag_hf = TAG_TYPE_FMCOS_ZJZY,  .tag_lf = TAG_TYPE_UNDEFINED, },   // 1
+        { .enabled_hf = true, .enabled_lf = false, .tag_hf = TAG_TYPE_FMCOS_ZJZY,  .tag_lf = TAG_TYPE_UNDEFINED, },   // 2
+        { .enabled_hf = true, .enabled_lf = false, .tag_hf = TAG_TYPE_FMCOS_ZJZY,   .tag_lf = TAG_TYPE_UNDEFINED, },   // 3
+        { .enabled_hf = true, .enabled_lf = false, .tag_hf = TAG_TYPE_FMCOS_ZJZY,   .tag_lf = TAG_TYPE_UNDEFINED, },   // 4
+        { .enabled_hf = true, .enabled_lf = false, .tag_hf = TAG_TYPE_FMCOS_ZJZY,   .tag_lf = TAG_TYPE_UNDEFINED, },   // 5
+        { .enabled_hf = true, .enabled_lf = false, .tag_hf = TAG_TYPE_FMCOS_ZJZY,   .tag_lf = TAG_TYPE_UNDEFINED, },   // 6
+        { .enabled_hf = true, .enabled_lf = false, .tag_hf = TAG_TYPE_FMCOS_ZJZY,   .tag_lf = TAG_TYPE_UNDEFINED, },   // 7
+        { .enabled_hf = true, .enabled_lf = false, .tag_hf = TAG_TYPE_FMCOS_ZJZY,   .tag_lf = TAG_TYPE_UNDEFINED, },   // 8
     },
 };
 // The card slot configuration unique CRC, once the slot configuration changes, can be checked by CRC
@@ -728,19 +728,14 @@ void tag_emulation_factory_init(void) {
         }
     }
 
-    if (slotConfig.slots[0].enabled_hf && slotConfig.slots[0].tag_hf == TAG_TYPE_FMCOS_ZJZY) {
-        // Initialize a high -frequency FMCOS ZJZY card in the card slot 1, if it does not exist.
-        get_fds_map_by_slot_sense_type_for_dump(0, TAG_SENSE_HF, &map_info);
-        if (!fds_is_exists(map_info.id, map_info.key)) {
-            tag_emulation_factory_data(0, slotConfig.slots[0].tag_hf);
+    for (int i = 0; i < 8; i++) {
+        if (slotConfig.slots[i].enabled_hf && slotConfig.slots[i].tag_hf == TAG_TYPE_FMCOS_ZJZY) {
+            // Initialize a high -frequency FMCOS ZJZY card in the card slot, if it does not exist.
+            get_fds_map_by_slot_sense_type_for_dump(i, TAG_SENSE_HF, &map_info);
+            if (!fds_is_exists(map_info.id, map_info.key)) {
+                tag_emulation_factory_data(i, slotConfig.slots[i].tag_hf);
+            }
         }
     }
 
-    if (slotConfig.slots[1].enabled_hf && slotConfig.slots[1].tag_hf == TAG_TYPE_FMCOS_ZJZY) {
-        // Initialize a high -frequency FMCOS ZJZY card in the card slot 1, if it does not exist.
-        get_fds_map_by_slot_sense_type_for_dump(1, TAG_SENSE_HF, &map_info);
-        if (!fds_is_exists(map_info.id, map_info.key)) {
-            tag_emulation_factory_data(1, slotConfig.slots[1].tag_hf);
-        }
-    }
 }
